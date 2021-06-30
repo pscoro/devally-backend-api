@@ -4,6 +4,8 @@ import logging from './config/logging';
 import config from './config/config';
 import mongoose from 'mongoose';
 
+import userRoutes from './api/v1/routes/user';
+
 const NAMESPACE = 'Server';
 
 const router = express();
@@ -51,6 +53,7 @@ router.use((req, res, next) => {
 });
 
 /** Routes go here */
+router.use('/api/v1/users', userRoutes);
 
 /** Error handling */
 router.use((req, res, next) => {
