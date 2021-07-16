@@ -1,0 +1,67 @@
+
+// Get all users
+GET http://localhost:5000/api/v1/users/get/all
+
+###
+
+// register new user (change creds)
+POST http://localhost:5000/api/v1/users/register
+Content-Type: application/json
+
+{
+    "email": "cumwdwqadataster@gmail.com",
+    "username": "werwqwerawdawwer",
+    "password": "highlyinsecure"
+}
+
+###
+
+// test duplicate user
+POST http://localhost:5000/api/v1/users/register
+Content-Type: application/json
+
+{
+    "email": "poopshitter@gmaiqq.com",
+    "username": "waqwedder",
+    "password": "highlyinsecure"
+}
+
+###
+
+POST http://localhost:5000/api/v1/users/login
+Content-Type: application/json
+
+{
+    "usernameOrEmail": "test",
+    "password": "test"
+}
+
+###
+
+POST http://localhost:5000/api/v1/projects/create
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InRlc3RAdGVzdC50ZXN0IiwidXNlcm5hbWUiOiJ0ZXN0IiwiaWF0IjoxNjI2MjE4NTcyLCJleHAiOjE2MjcxMTg1NzIsImlzcyI6ImRldkFsbHkifQ.naDr5fC5P_lpO49aKAV9jWD6wkFhu0NE5ySgY4JitOw
+
+{
+    "images": [],
+    "title": "A project",
+    "description": "a desc",
+    "tags": [],
+    "positions": []
+}
+
+###
+
+GET http://localhost:5000/api/v1/projects/get/60ee20c3729e2b7a7065355a
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InRlc3RAdGVzdC50ZXN0IiwidXNlcm5hbWUiOiJ0ZXN0IiwiaWF0IjoxNjI2MjA0OTk5LCJleHAiOjE2MjcxMDQ5OTksImlzcyI6ImRldkFsbHkifQ.zTcOBTU_UhwAtQUmXGy8dGxh1OsgWSEyJZk8kMw9nrg
+
+{}
+
+###
+
+GET http://localhost:5000/api/v1/token/refresh
+Content-Type: application/json
+Cache-Control: no-cache
+
+{}

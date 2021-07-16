@@ -1,16 +1,13 @@
+import { ReturnModelType } from '@typegoose/typegoose';
 import jwt from 'jsonwebtoken';
 import config from '../../../config/config';
 import logging from '../../../config/logging';
-import IUser from '../interfaces/user';
+import { UserData } from '../shared/types';
 
 const NAMESPACE = 'Auth';
 
-const signJWT = (user: IUser, callback: (error: Error | null, token: string | null) => void): void => {
-    var timeSinceEpoch = new Date().getTime();
-    var expirationTime = timeSinceEpoch + Number(config.server.token.expireTime) * 100000;
-    var expirationTimeInSeconds = Math.floor(expirationTime / 1000);
-
-    logging.info(NAMESPACE, `Attempting to sign token for ${user._id}`);
+const signJWT = (user: UserData, callback: (error: Error | null, token: string | null) => void): void => {
+    logging.info(NAMESPACE, `Attempting to sign token for ${user.username}`);
 
     try {
         jwt.sign(
@@ -18,11 +15,11 @@ const signJWT = (user: IUser, callback: (error: Error | null, token: string | nu
                 email: user.email,
                 username: user.username
             },
-            config.server.token.secret,
+            config.server.token.accessSecret,
             {
                 issuer: config.server.token.issuer,
                 algorithm: 'HS256',
-                expiresIn: expirationTimeInSeconds
+                expiresIn: config.server.token.accessExpireTime
             },
             (error, token) => {
                 if (error) {

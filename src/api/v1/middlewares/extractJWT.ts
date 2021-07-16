@@ -7,19 +7,25 @@ import logging from '../../../config/logging';
 const NAMESPACE = 'Auth';
 
 const extractJWT = (req: Request, res: Response, next: NextFunction) => {
+    console.log(req);
     logging.info(NAMESPACE, 'Validating Token');
 
-    let token = req.headers.authorization?.split(' ')[1];
+    // const token = req.headers['x-access-token'] as string;
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader?.split(' ')[1];
 
     if (token) {
-        jwt.verify(token, config.server.token.secret, (error, decoded) => {
+        jwt.verify(token, config.server.token.accessSecret, (error, decoded) => {
+            //decoded == user for users etc WOAH!
             if (error) {
-                return res.status(404).json({
+                return res.status(403).json({
                     message: error,
                     error
                 });
             } else {
-                res.locals.jwt = decoded;
+                // res.locals.jwt = decoded;
+                req.body.userEmail = (<any>decoded).email;
+                console.log('HI');
                 next();
             }
         });

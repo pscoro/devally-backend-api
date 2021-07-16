@@ -1,10 +1,14 @@
 import http from 'http';
 import express from 'express';
+var cookieParser = require('cookie-parser');
 import logging from './config/logging';
 import config from './config/config';
 import mongoose from 'mongoose';
+import cors from 'cors';
 
 import userRoutes from './api/v1/routes/user';
+import tokenRoutes from './api/v1/routes/token';
+import projectRoutes from './api/v1/routes/project';
 
 const NAMESPACE = 'Server';
 
@@ -36,13 +40,21 @@ router.use((req, res, next) => {
 });
 
 /** Parse the body of the request */
+router.use(cookieParser());
 router.use(express.urlencoded({ extended: true }));
 router.use(express.json());
+router.use(
+    cors({
+        origin: 'https://localhost:3000',
+        credentials: true
+    })
+);
 
 /** Rules of our API */
 router.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*'); // change later
+    res.header('Access-Control-Allow-Origin', 'https://localhost:3000'); // change later
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Credentials', 'true');
 
     if (req.method == 'OPTIONS') {
         res.header('Access-Control-Allow-Methods', 'PUT, POST, PATCH, DELETE, GET');
@@ -54,6 +66,8 @@ router.use((req, res, next) => {
 
 /** Routes go here */
 router.use('/api/v1/users', userRoutes);
+router.use('/api/v1/token', tokenRoutes);
+router.use('/api/v1/projects', projectRoutes);
 
 /** Error handling */
 router.use((req, res, next) => {

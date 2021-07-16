@@ -1,37 +1,17 @@
 import { NextFunction, Request, Response } from 'express';
 import mongoose from 'mongoose';
 import bcryptjs from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 import logging from '../../../config/logging';
 import User from '../models/user';
 import signJWT from '../functions/signJWT';
+import config from './../../../config/config';
+import { Session } from './../shared/types';
 
 const NAMESPACE = 'Users';
 
-// const createUser = (req: Request, res: Response, next: NextFunction) => {
-//     let { email, username, password } = req.body;
-
-//     const user = new User({
-//         _id: new mongoose.Types.ObjectId(),
-//         email,
-//         username,
-//         password
-//     });
-
-//     return user
-//         .save()
-//         .then((result) => {
-//             return res.status(201).json({
-//                 user: result
-//             });
-//         })
-//         .catch((error) => {
-//             return res.status(500).json({
-//                 message: error.message,
-//                 error
-//             });
-//         });
-// };
+let refreshTokens = [];
 
 const validateToken = (req: Request, res: Response, next: NextFunction) => {
     logging.info(NAMESPACE, 'Token validated, user authorized.');
@@ -43,6 +23,7 @@ const validateToken = (req: Request, res: Response, next: NextFunction) => {
 
 const register = (req: Request, res: Response, next: NextFunction) => {
     let { email, username, password } = req.body;
+    console.log(req.body);
 
     bcryptjs.hash(password, 10, (hashError, hash) => {
         if (hashError) {
@@ -52,92 +33,172 @@ const register = (req: Request, res: Response, next: NextFunction) => {
             });
         }
 
-        const _user = new User({
-            _id: new mongoose.Types.ObjectId(),
-            email,
-            username,
-            password: hash
-        });
-
-        return _user
-            .save()
-            .then((result) => {
+        User.create(
+            {
+                _id: new mongoose.Types.ObjectId(),
+                email: email,
+                username: username,
+                password: hash
+            },
+            (error, result) => {
+                if (error) {
+                    return res.status(500).json({
+                        message: error.message,
+                        error
+                    });
+                }
+                if (!result) {
+                    return res.status(500).json({
+                        message: 'User not created'
+                    });
+                }
                 return res.status(201).json({
                     user: result
                 });
-            })
-            .catch((error) => {
-                return res.status(500).json({
-                    message: error.message,
-                    error
-                });
-            });
+            }
+        );
+
+        // return _user
+        //     .save()
+        //     .then((result) => {
+        //         return res.status(201).json({
+        //             user: result
+        //         });
+        //     })
+        //     .catch((error) => {
+        //         return res.status(500).json({
+        //             message: error.message,
+        //             error
+        //         });
+        //     });
     });
 };
 
 const login = (req: Request, res: Response, next: NextFunction) => {
+    const useCookie = typeof req.body.cookie !== 'undefined' ? req.body.cookie : true;
+    console.log(req.body);
     let { usernameOrEmail, password } = req.body;
 
     // console.log(req);
 
     User.find({ username: usernameOrEmail })
         .exec()
-        .then((users) => {
-            if (users.length === 0) {
+        .then((usersByUsername) => {
+            if (usersByUsername.length === 0) {
                 User.find({ email: usernameOrEmail })
                     .exec()
-                    .then((users) => {
-                        if (users.length !== 1) {
+                    .then((usersByEmail) => {
+                        if (usersByEmail.length !== 1) {
                             return res.status(401).json({
                                 message: 'Unauthorized'
                             });
                         }
 
-                        bcryptjs.compare(password, users[0].password, (error, result) => {
+                        bcryptjs.compare(password, usersByEmail[0].password, (error, result) => {
                             if (error) {
                                 return res.status(401).json({
                                     message: 'Password Mismatch'
                                 });
                             } else if (result) {
-                                signJWT(users[0], (_error, token) => {
+                                signJWT(usersByEmail[0], (_error, token) => {
                                     if (_error) {
                                         return res.status(500).json({
                                             message: _error.message,
                                             error: _error
                                         });
                                     } else if (token) {
-                                        return res.status(200).json({
-                                            message: 'Auth successful',
-                                            token: token,
-                                            user: users[0]
+                                        const refreshToken = jwt.sign(
+                                            {
+                                                email: usersByEmail[0].email,
+                                                username: usersByEmail[0].username
+                                            },
+                                            config.server.token.refreshSecret,
+                                            { expiresIn: config.server.token.refreshExpireTime }
+                                        );
+                                        // refreshTokens.push(refreshToken); //delete maybe
+
+                                        let tokenDBObj = {
+                                            value: refreshToken,
+                                            issuedAt: Date.now()
+                                        };
+                                        User.findOneAndUpdate({ email: usernameOrEmail }, { $push: { tokens: { tokenDBObj } } }, { upsert: false }, (err, doc) => {
+                                            if (err) {
+                                                logging.error(NAMESPACE, 'Error updating refresh token in DB');
+                                                return res.status(500).send(err);
+                                            }
+                                            const session: Session = {
+                                                access_token: token,
+                                                access_expires_in: config.server.token.accessExpireTime,
+                                                user: {
+                                                    email: usersByEmail[0].email,
+                                                    username: usersByEmail[0].username
+                                                }
+                                            };
+
+                                            if (useCookie) {
+                                                console.log('HOW');
+                                                res.cookie('refresh_token', refreshToken, { httpOnly: true });
+                                                session.refresh_token = refreshToken;
+                                            }
+                                            return res.status(200).send(session);
                                         });
                                     }
                                 });
                             }
                         });
                     });
-            } else if (users.length !== 1) {
+            } else if (usersByUsername.length !== 1) {
                 return res.status(401).json({
                     message: 'Unauthorized'
                 });
             } else {
-                bcryptjs.compare(password, users[0].password, (error, result) => {
+                bcryptjs.compare(password, usersByUsername[0].password, (error, result) => {
                     if (error) {
                         return res.status(401).json({
                             message: 'Password Mismatch'
                         });
                     } else if (result) {
-                        signJWT(users[0], (_error, token) => {
+                        signJWT(usersByUsername[0], (_error, token) => {
                             if (_error) {
                                 return res.status(500).json({
                                     message: _error.message,
                                     error: _error
                                 });
                             } else if (token) {
-                                return res.status(200).json({
-                                    message: 'Auth successful',
-                                    token: token,
-                                    user: users[0]
+                                const refreshToken = jwt.sign(
+                                    {
+                                        email: usersByUsername[0].email,
+                                        username: usersByUsername[0].username
+                                    },
+                                    config.server.token.refreshSecret,
+                                    { expiresIn: config.server.token.refreshExpireTime }
+                                );
+
+                                let tokenDBObj = {
+                                    value: refreshToken,
+                                    issuedAt: Date.now()
+                                };
+                                console.log(tokenDBObj);
+                                User.findOneAndUpdate({ username: usernameOrEmail }, { $push: { tokens: tokenDBObj } }, { upsert: false }, (err, doc) => {
+                                    if (err) {
+                                        logging.error(NAMESPACE, 'Error updating refresh token in DB');
+                                        return res.status(500).send(err);
+                                    }
+                                    const session: Session = {
+                                        access_token: token,
+                                        access_expires_in: config.server.token.accessExpireTime,
+                                        user: {
+                                            email: usersByUsername[0].email,
+                                            username: usersByUsername[0].username
+                                        }
+                                    };
+
+                                    if (useCookie) {
+                                        console.log('USING COOKIE');
+                                        res.cookie('refresh_token', refreshToken, { httpOnly: true, path: '/', domain: '127.0.0.1', sameSite: 'none', secure: true });
+                                        session.refresh_token = refreshToken;
+                                    }
+                                    return res.status(200).send(session);
                                 });
                             }
                         });
@@ -151,6 +212,11 @@ const login = (req: Request, res: Response, next: NextFunction) => {
                 error: err
             });
         });
+};
+
+const logout = (req: Request, res: Response, next: NextFunction) => {
+    refreshTokens = refreshTokens.filter((token) => token !== req.body.token);
+    res.sendStatus(204);
 };
 
 const getAllUsers = (req: Request, res: Response, next: NextFunction) => {
